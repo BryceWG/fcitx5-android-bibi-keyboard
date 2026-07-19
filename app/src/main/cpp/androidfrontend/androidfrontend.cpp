@@ -65,42 +65,54 @@ public:
 
     void updateInputPanel() {
         const InputPanel &ip = inputPanel();
+        std::vector<CandidateActionEntity> tabs;
+        auto list = ip.candidateList();
+        if (list) {
+            auto tabbed = ip.candidateList()->toTabbed();
+            if (tabbed) {
+                auto tabActions = tabbed->tabActions();
+                for (const auto &a: tabActions) {
+                    tabs.emplace_back(a);
+                }
+            }
+        }
         frontend_->updateInputPanel(
                 filterText(ip.preedit()),
                 filterText(ip.auxUp()),
-                filterText(ip.auxDown())
+                filterText(ip.auxDown()),
+                tabs
         );
     }
 
     void updateCandidatesBulk() {
-        std::vector<std::string> candidates;
-        int size = 0;
+        std::vector<CandidateEntity> candidates;
+        int total = 0;
         const auto &list = inputPanel().candidateList();
         if (list) {
             const auto &bulk = list->toBulk();
             if (bulk) {
-                size = bulk->totalSize();
+                total = bulk->totalSize();
                 // limit candidate count to 16 (for paging)
-                const int limit = size < 0 ? 16 : std::min(size, 16);
+                const int limit = total < 0 ? 16 : std::min(total, 16);
                 for (int i = 0; i < limit; i++) {
                     try {
-                        auto &candidate = bulk->candidateFromAll(i);
                         // maybe unnecessary; I don't see anywhere using `CandidateWord::setPlaceHolder`
                         // if (candidate.isPlaceHolder()) continue;
-                        candidates.emplace_back(filterString(candidate.textWithComment()));
+                        candidates.emplace_back(candidateEntity(bulk->candidateFromAll(i)));
                     } catch (const std::invalid_argument &e) {
-                        size = static_cast<int>(candidates.size());
+                        FCITX_WARN() << "updateCandidatesBulk(): " << e.what();
+                        total = static_cast<int>(candidates.size());
                         break;
                     }
                 }
             } else {
-                size = list->size();
-                for (int i = 0; i < size; i++) {
-                    candidates.emplace_back(filterString(list->candidate(i).textWithComment()));
+                total = list->size();
+                for (int i = 0; i < total; i++) {
+                    candidates.emplace_back(candidateEntity(list->candidate(i)));
                 }
             }
         }
-        frontend_->updateCandidateList(candidates, size);
+        frontend_->updateCandidateList(candidates, total);
     }
 
     void updateCandidatesPaged() {
@@ -122,12 +134,7 @@ public:
         std::vector<CandidateEntity> candidates;
         candidates.reserve(size);
         for (int i = 0; i < size; i++) {
-            const auto &c = list->candidate(i);
-            candidates.emplace_back(
-                    filterString(list->label(i)),
-                    filterString(c.text()),
-                    filterString(c.comment())
-            );
+            candidates.emplace_back(candidateEntityWithLabel(list->label(i), list->candidate(i)));
         }
         PagedCandidateEntity paged(candidates, cursorIndex, layoutHint, hasPrev, hasNext);
         frontend_->updatePagedCandidate(paged);
@@ -166,8 +173,8 @@ public:
         return true;
     }
 
-    std::vector<std::string> getCandidates(const int offset, const int limit) {
-        std::vector<std::string> candidates;
+    std::vector<CandidateEntity> getCandidates(const int offset, const int limit) {
+        std::vector<CandidateEntity> candidates;
         const auto &list = inputPanel().candidateList();
         if (list) {
             const int last = offset + limit;
@@ -177,8 +184,7 @@ public:
                 const int end = totalSize < 0 ? last : std::min(totalSize, last);
                 for (int i = offset; i < end; i++) {
                     try {
-                        auto &candidate = bulk->candidateFromAll(i);
-                        candidates.emplace_back(filterString(candidate.textWithComment()));
+                        candidates.emplace_back(candidateEntity(bulk->candidateFromAll(i)));
                     } catch (const std::invalid_argument &e) {
                         break;
                     }
@@ -186,15 +192,15 @@ public:
             } else {
                 const int end = std::min(list->size(), last);
                 for (int i = offset; i < end; i++) {
-                    candidates.emplace_back(filterString(list->candidate(i).textWithComment()));
+                    candidates.emplace_back(candidateEntityWithLabel(list->label(i), list->candidate(i)));
                 }
             }
         }
         return candidates;
     }
 
-    std::vector<CandidateAction> getCandidateAction(const int idx) {
-        std::vector<CandidateAction> actions;
+    std::vector<CandidateActionEntity> getCandidateAction(const int idx) {
+        std::vector<CandidateActionEntity> actions;
         const auto &list = inputPanel().candidateList();
         if (list) {
             const auto &actionable = list->toActionable();
@@ -243,6 +249,18 @@ public:
         }
     }
 
+    void triggerTabAction(const int idx) {
+        const auto &list = inputPanel().candidateList();
+        if (!list) return;
+        const auto &tabbed = list->toTabbed();
+        if (!tabbed) return;
+        try {
+            tabbed->triggerTabAction(idx);
+        } catch (const std::exception &e) {
+            FCITX_WARN() << "triggerTabAction(" << idx << ") failed:" << e.what();
+        }
+    }
+
     void offsetCandidatePage(int delta) {
         if (delta == 0) {
             return;
@@ -274,6 +292,16 @@ private:
 
     inline std::string filterString(const Text &orig) {
         return filterText(orig).toString();
+    }
+
+    CandidateEntity candidateEntity(const CandidateWord &candidate) {
+        return CandidateEntity("", filterString(candidate.text()),
+                               filterString(candidate.comment()), candidate.spaceBetweenComment());
+    }
+
+    CandidateEntity candidateEntityWithLabel(const Text &label, const CandidateWord &candidate) {
+        return CandidateEntity(filterString(label), filterString(candidate.text()),
+                               filterString(candidate.comment()), candidate.spaceBetweenComment());
     }
 };
 
@@ -348,7 +376,7 @@ void AndroidFrontend::commitString(const std::string &str, const int cursor) {
     commitStringCallback(str, cursor);
 }
 
-void AndroidFrontend::updateCandidateList(const std::vector<std::string> &candidates, const int size) {
+void AndroidFrontend::updateCandidateList(const std::vector<CandidateEntity> &candidates, const int size) {
     candidateListCallback(candidates, size);
 }
 
@@ -356,8 +384,8 @@ void AndroidFrontend::updateClientPreedit(const Text &clientPreedit) {
     preeditCallback(clientPreedit);
 }
 
-void AndroidFrontend::updateInputPanel(const Text &preedit, const Text &auxUp, const Text &auxDown) {
-    inputPanelCallback(preedit, auxUp, auxDown);
+void AndroidFrontend::updateInputPanel(const Text &preedit, const Text &auxUp, const Text &auxDown, const std::vector<CandidateActionEntity> &tabs) {
+    inputPanelCallback(preedit, auxUp, auxDown, tabs);
 }
 
 void AndroidFrontend::releaseInputContext(const int uid) {
@@ -373,7 +401,7 @@ bool AndroidFrontend::selectCandidate(int idx) {
     }
 }
 
-std::vector<CandidateAction> AndroidFrontend::getCandidateActions(const int idx) {
+std::vector<CandidateActionEntity> AndroidFrontend::getCandidateActions(const int idx) {
     if (!activeIC_) return {};
     return activeIC_->getCandidateAction(idx);
 }
@@ -381,6 +409,11 @@ std::vector<CandidateAction> AndroidFrontend::getCandidateActions(const int idx)
 void AndroidFrontend::triggerCandidateAction(const int idx, const int actionIdx) {
     if (!activeIC_) return;
     activeIC_->triggerCandidateAction(idx, actionIdx);
+}
+
+void AndroidFrontend::triggerTabAction(const int idx) {
+    if (!activeIC_) return;
+    activeIC_->triggerTabAction(idx);
 }
 
 bool AndroidFrontend::isInputPanelEmpty() {
@@ -440,7 +473,7 @@ void AndroidFrontend::setCandidateListCallback(const CandidateListCallback &call
     candidateListCallback = callback;
 }
 
-std::vector<std::string> AndroidFrontend::getCandidates(const int offset, const int limit) {
+std::vector<CandidateEntity> AndroidFrontend::getCandidates(const int offset, const int limit) {
     if (!activeIC_) return {};
     return activeIC_->getCandidates(offset, limit);
 }
@@ -471,6 +504,11 @@ void AndroidFrontend::offsetCandidatePage(int delta) {
     activeIC_->offsetCandidatePage(delta);
 }
 
+void AndroidFrontend::triggerCandidateListTabAction(int id) {
+    if (!activeIC_) return;
+    activeIC_->triggerTabAction(id);
+}
+
 void AndroidFrontend::setCommitStringCallback(const CommitStringCallback &callback) {
     commitStringCallback = callback;
 }
@@ -479,7 +517,7 @@ void AndroidFrontend::setPreeditCallback(const ClientPreeditCallback &callback) 
     preeditCallback = callback;
 }
 
-void AndroidFrontend::setInputPanelAuxCallback(const InputPanelCallback &callback) {
+void AndroidFrontend::setInputPanelCallback(const InputPanelCallback &callback) {
     inputPanelCallback = callback;
 }
 

@@ -321,9 +321,10 @@
     <string name="hide_unsupported_emojis">隱藏不支援的表情</string>
     <!-- Yanxi AIDL linkage error messages -->
     <string name="asrkb_err_busy">語音服務忙碌中，請稍後再試。</string>
-    <string name="asrkb_err_feature_disabled">請先在言犀中開啟「允許外部輸入法聯動（AIDL）。</string>
+    <string name="asrkb_err_feature_disabled">請先在言犀中開啟「允許外部輸入法聯動（AIDL）」。</string>
     <string name="asrkb_client_need_mic_permission">小企鵝需要麥克風權限以進行語音輸入。</string>
     <string name="asrkb_err_audio_record_failed">音訊錄製初始化失敗，麥克風可能被其他應用程式占用。</string>
     <string name="asrkb_err_start_failed_with_code">啟動會話失敗（錯誤碼 %1$d）</string>
     <string name="asrkb_err_service_error_with_code">語音服務錯誤（錯誤碼 %1$d）</string>
+    <string name="preferred_voice_input">首選語音輸入</string>
 </resources>

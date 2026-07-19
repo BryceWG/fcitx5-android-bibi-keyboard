@@ -108,6 +108,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             setCandidatePagingMode(if (isVirtualKeyboard) 0 else 1)
         }
         currentInputConnection?.monitorCursorAnchor(!isVirtualKeyboard)
+        if (isVirtualKeyboard) {
+            hideStatusIcon()
+        } else {
+            showStatusIcon(StatusIconMapping.fromEntry(fcitx.runImmediately { inputMethodEntryCached }))
+        }
         window.window?.let {
             navbarMgr.evaluate(it, isVirtualKeyboard)
         }
@@ -313,6 +318,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                     // [^1]: notify system that input method subtype has changed
                     switchInputMethod(InputMethodUtil.componentName, subtype)
                 }
+                if (inputDeviceMgr.evaluateOnInputMethodActivate()) {
+                    showStatusIcon(StatusIconMapping.fromEntry(event.data))
+                }
             }
             is FcitxEvent.SwitchInputMethodEvent -> {
                 val (reason) = event.data
@@ -348,7 +356,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         } else if (lastSelection.start > 0) {
             selection.predictOffset(-1)
         }
-        // In practice nobody (apart form ourselves) would set `privateImeOptions` to our
+        // In practice nobody (apart from ourselves) would set `privateImeOptions` to our
         // `DeleteSurroundingFlag`, leading to a behavior of simulating backspace key pressing
         // in almost every EditText.
         if (currentInputEditorInfo.privateImeOptions != DeleteSurroundingFlag ||
@@ -393,7 +401,12 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     private fun handleArrowKey(keyCode: Int) {
-        if (currentInputEditorInfo.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_NULL) {
+        val type = currentInputEditorInfo.inputType and InputType.TYPE_MASK_CLASS
+        val variation = currentInputEditorInfo.inputType and InputType.TYPE_MASK_VARIATION
+        if (type == InputType.TYPE_NULL ||
+            // confirm URL suggestion in browser location bar, see also https://bugzilla.mozilla.org/show_bug.cgi?id=1999915
+            type == InputType.TYPE_CLASS_TEXT && variation == InputType.TYPE_TEXT_VARIATION_URI
+        ) {
             sendDownUpKeyEvents(keyCode)
             return
         }
@@ -524,13 +537,24 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         postFcitxJob { reset() }
         /**
+         * skip keyboard|keyboardHidden changes, because we have [inputDeviceMgr]
          * skip uiMode (system light/dark mode) changes, because we have [onThemeChangeListener]
          * to replace InputView(s) when needed
          * [android.inputmethodservice.InputMethodService.onConfigurationChanged] would call
          * resetStateForNewConfiguration() which calls initViews() causes InputView(s) to be replaced again
          * https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r36/core/java/android/inputmethodservice/InputMethodService.java#1984
          */
-        if (lastKnownConfig.diff(newConfig) != ActivityInfo.CONFIG_UI_MODE) {
+        val f = ActivityInfo.CONFIG_KEYBOARD or
+                ActivityInfo.CONFIG_KEYBOARD_HIDDEN or
+                ActivityInfo.CONFIG_UI_MODE
+        val diff = lastKnownConfig.diff(newConfig)
+        Timber.d("onConfigurationChanged diff=$diff")
+        /**
+         * perform `super.onConfigurationChanged` only when `newConfig` diff fall outside "skipped" flags
+         * we have to calculate the mask ourselves because nobody knows how `handledConfigChanges` works
+         * https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r36/core/java/android/inputmethodservice/InputMethodService.java#1876
+         */
+        if (diff and f != diff) {
             super.onConfigurationChanged(newConfig)
         }
         lastKnownConfig = newConfig
@@ -637,12 +661,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     // Added in API level 14, deprecated in 29
+    // it's needed because editors still use it even on API 36
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun onViewClicked(focusChanged: Boolean) {
         super.onViewClicked(focusChanged)
-        if (Build.VERSION.SDK_INT < 34) {
-            inputDeviceMgr.evaluateOnViewClicked(this)
-        }
+        inputDeviceMgr.evaluateOnViewClicked(this)
     }
 
     @RequiresApi(34)
@@ -751,8 +774,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 }
                 // anchor CandidatesView to bottom-left corner in case InputConnection does not
                 // support monitoring CursorAnchorInfo
-                workaroundNullCursorAnchorInfo()
+                candidatesView?.updateCursorAnchor(contentSize)
             }
+            showStatusIcon(StatusIconMapping.fromEntry(fcitx.runImmediately { inputMethodEntryCached }))
         }
     }
 
@@ -766,8 +790,14 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     ) {
         // onUpdateSelection can left behind when user types quickly enough, eg. long press backspace
         cursorUpdateIndex += 1
-        Timber.d("onUpdateSelection: old=[$oldSelStart,$oldSelEnd] new=[$newSelStart,$newSelEnd]")
-        handleCursorUpdate(newSelStart, newSelEnd, cursorUpdateIndex)
+        Timber.d("onUpdateSelection: old=[$oldSelStart,$oldSelEnd] new=[$newSelStart,$newSelEnd] cand=[$candidatesStart,$candidatesEnd]")
+        handleCursorUpdate(
+            newSelStart,
+            newSelEnd,
+            candidatesStart,
+            candidatesEnd,
+            cursorUpdateIndex
+        )
         inputView?.updateSelection(newSelStart, newSelEnd)
     }
 
@@ -791,17 +821,6 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     private val anchorPosition = floatArrayOf(0f, 0f, 0f, 0f)
 
-    /**
-     * anchor candidates view to bottom-left corner, only works if [decorLocationUpdated]
-     */
-    private fun workaroundNullCursorAnchorInfo() {
-        anchorPosition[0] = 0f
-        anchorPosition[1] = contentSize[1]
-        anchorPosition[2] = 0f
-        anchorPosition[3] = contentSize[1]
-        candidatesView?.updateCursorAnchor(anchorPosition, contentSize)
-    }
-
     override fun onUpdateCursorAnchorInfo(info: CursorAnchorInfo) {
         val bounds = info.getCharacterBounds(0)
         if (bounds != null) {
@@ -824,7 +843,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         }
         if (anchorPosition.any(Float::isNaN)) {
             // anchor candidates view to bottom-left corner in case CursorAnchorInfo is invalid
-            workaroundNullCursorAnchorInfo()
+            candidatesView?.updateCursorAnchor(contentSize)
             return
         }
         // params of `Matrix.mapPoints` must be [x0, y0, x1, y1]
@@ -837,8 +856,22 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         candidatesView?.updateCursorAnchor(anchorPosition, contentSize)
     }
 
-    private fun handleCursorUpdate(newSelStart: Int, newSelEnd: Int, updateIndex: Int) {
+    private fun handleCursorUpdate(
+        newSelStart: Int,
+        newSelEnd: Int,
+        newComposingStart: Int,
+        newComposingEnd: Int,
+        updateIndex: Int
+    ) {
         if (selection.consume(newSelStart, newSelEnd)) {
+            // try restore composing range in case it was dropped by InputFilter
+            // but only when prediction matches, since InputFilter can also change editor content
+            // ref:
+            // https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r36/core/java/android/widget/Editor.java#2083
+            // https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r36/core/java/android/widget/TextView.java#7351
+            if (newComposingStart == -1 && newComposingEnd == -1 && composing.isNotEmpty()) {
+                currentInputConnection?.setComposingRegion(composing.start, composing.end)
+            }
             return // do nothing if prediction matches
         } else {
             // cursor update can't match any prediction: it's treated as a user input
@@ -1029,6 +1062,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         postFcitxJob {
             focusOutIn()
         }
+        hideStatusIcon()
         showingDialog?.dismiss()
     }
 

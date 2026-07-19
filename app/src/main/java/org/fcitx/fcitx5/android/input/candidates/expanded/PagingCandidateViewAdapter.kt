@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2026 Fcitx5 for Android Contributors
  */
 
 package org.fcitx.fcitx5.android.input.candidates.expanded
@@ -8,22 +8,22 @@ package org.fcitx.fcitx5.android.input.candidates.expanded
 import android.view.ViewGroup
 import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
+import org.fcitx.fcitx5.android.core.CandidateWord
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.input.candidates.CandidateItemUi
 import org.fcitx.fcitx5.android.input.candidates.CandidateViewHolder
 
 open class PagingCandidateViewAdapter(val theme: Theme) :
-    PagingDataAdapter<String, CandidateViewHolder>(diffCallback) {
+    PagingDataAdapter<CandidateWord, CandidateViewHolder>(diffCallback) {
 
     companion object {
-        private val diffCallback = object : DiffUtil.ItemCallback<String>() {
-            override fun areItemsTheSame(oldItem: String, newItem: String): Boolean {
-                return oldItem === newItem
-            }
-
-            override fun areContentsTheSame(oldItem: String, newItem: String): Boolean {
-                return oldItem.contentEquals(newItem)
-            }
+        /**
+         * Always re-bind all [CandidateViewHolder]s every time to make sure `idx` is up-to-date.
+         * [CandidateViewHolder.update] would skip unnecessary UI updates.
+         */
+        private val diffCallback = object : DiffUtil.ItemCallback<CandidateWord>() {
+            override fun areItemsTheSame(oldItem: CandidateWord, newItem: CandidateWord) = false
+            override fun areContentsTheSame(oldItem: CandidateWord, newItem: CandidateWord) = false
         }
     }
 
@@ -40,9 +40,7 @@ open class PagingCandidateViewAdapter(val theme: Theme) :
     }
 
     override fun onBindViewHolder(holder: CandidateViewHolder, position: Int) {
-        val text = getItem(position)!!
-        holder.ui.text.text = text
-        holder.text = text
-        holder.idx = position + offset
+        val candidate = getItem(position) ?: CandidateWord.Empty
+        holder.update(position + offset, candidate)
     }
 }

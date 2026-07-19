@@ -25,6 +25,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.CapabilityFlag
 import org.fcitx.fcitx5.android.core.CapabilityFlags
@@ -46,6 +47,7 @@ import org.fcitx.fcitx5.android.input.bar.KawaiiBarStateMachine.TransitionEvent.
 import org.fcitx.fcitx5.android.input.bar.ui.CandidateUi
 import org.fcitx.fcitx5.android.input.bar.ui.IdleUi
 import org.fcitx.fcitx5.android.input.bar.ui.TitleUi
+import org.fcitx.fcitx5.android.input.bar.ui.ToolButton
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcastReceiver
 import org.fcitx.fcitx5.android.input.candidates.expanded.ExpandedCandidateStyle
 import org.fcitx.fcitx5.android.input.candidates.expanded.window.FlexboxExpandedCandidateWindow
@@ -76,7 +78,10 @@ import splitties.views.dsl.core.lParams
 import splitties.views.dsl.core.matchParent
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.hypot
 import kotlin.math.min
 
 class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(),
@@ -99,6 +104,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private val expandToolbarByDefault by prefs.keyboard.expandToolbarByDefault
     private val toolbarNumRowOnPassword by prefs.keyboard.toolbarNumRowOnPassword
     private val showVoiceInputButton by prefs.keyboard.showVoiceInputButton
+    private val preferredVoiceInput by prefs.keyboard.preferredVoiceInput
 
     private var clipboardTimeoutJob: Job? = null
 
@@ -107,6 +113,10 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private var isCapabilityFlagsPassword: Boolean = false
     private var isKeyboardLayoutNumber: Boolean = false
     private var isToolbarManuallyToggled: Boolean = false
+
+    private enum class NumberRowState { Auto, ForceShow, ForceHide }
+
+    private var numberRowState = NumberRowState.Auto
 
     @Keep
     private val onClipboardUpdateListener =
@@ -165,9 +175,10 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
 
     private fun evalIdleUiState(fromUser: Boolean = false) {
         val newState = when {
+            numberRowState == NumberRowState.ForceShow -> IdleUi.State.NumberRow
             isClipboardFresh -> IdleUi.State.Clipboard
             isInlineSuggestionPresent -> IdleUi.State.InlineSuggestion
-            isCapabilityFlagsPassword && !isKeyboardLayoutNumber -> IdleUi.State.NumberRow
+            isCapabilityFlagsPassword && !isKeyboardLayoutNumber && numberRowState != NumberRowState.ForceHide -> IdleUi.State.NumberRow
             /**
              * state matrix:
              *                               expandToolbarByDefault
@@ -186,8 +197,58 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         service.requestHideSelf(0)
     }
 
-    private val swipeDownHideKeyboardCallback = CustomGestureView.OnGestureListener { _, e ->
+    private val swipeDownExpandCallback = CustomGestureView.OnGestureListener { _, e ->
         if (e.type == CustomGestureView.GestureType.Up && e.totalY > 0) {
+            service.requestHideSelf(0)
+            true
+        } else false
+    }
+
+    // Combined gesture: determine primary direction by comparing totalX and totalY.
+    // - If horizontal is dominant and left, show number row (when allowed).
+    // - If vertical is dominant and down, hide keyboard.
+    private val swipeHideKeyboardCallback = CustomGestureView.OnGestureListener { v, e ->
+        require(v is ToolButton)
+        val numberRowAvailable = isCapabilityFlagsPassword && !isKeyboardLayoutNumber
+        if (numberRowAvailable) {
+            val dir = if (context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_LTR) 1 else -1
+            // `e.x` and `e.y` are relative to the view's top-left corner
+            val centerX = e.x - v.width / 2f
+            val centerY = e.y - v.height / 2f
+
+            val distance = hypot(centerX, centerY)
+            // the button is ↓, so apply -90 degrees offset
+            var angle = atan2(-centerX, centerY) * (180f / PI.toFloat())
+
+            when (e.type) {
+                CustomGestureView.GestureType.Move -> {
+                    angle = if (angle in -45f..45f) {
+                        angle.coerceIn(-10f, 10f)
+                    } else abs(angle).coerceIn(90f - 10f, 90f + 10f) * dir
+                    v.iconRotation = angle
+                }
+                CustomGestureView.GestureType.Up -> {
+                    val handled = when (angle) {
+                        in -45f..45f if distance > v.swipeThresholdX -> {
+                            service.requestHideSelf(0)
+                            true
+                        }
+                        !in -45f..45f if distance > v.swipeThresholdY -> {
+                            v.iconRotation = 90f * dir
+                            numberRowState = NumberRowState.ForceShow
+                            evalIdleUiState(fromUser = true)
+                            true
+                        }
+                        else -> false
+                    }
+                    v.iconRotation = 0f
+                    return@OnGestureListener handled
+                }
+                else -> {}
+            }
+        }
+
+        if (e.type == CustomGestureView.GestureType.Up && abs(e.totalY) > abs(e.totalX) && e.totalY > 0) {
             service.requestHideSelf(0)
             true
         } else false
@@ -226,7 +287,8 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                 setOnClickListener(hideKeyboardCallback)
                 swipeEnabled = true
                 swipeThresholdY = dp(HEIGHT.toFloat())
-                onGestureListener = swipeDownHideKeyboardCallback
+                swipeThresholdX = swipeThresholdY
+                onGestureListener = swipeHideKeyboardCallback
             }
             buttonsUi.apply {
                 undoButton.setOnClickListener {
@@ -262,6 +324,12 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                     true
                 }
             }
+            numberRow.apply {
+                onCollapseListener = {
+                    numberRowState = NumberRowState.ForceHide
+                    evalIdleUiState(fromUser = true)
+                }
+            }
         }
     }
 
@@ -270,7 +338,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
             expandButton.apply {
                 swipeEnabled = true
                 swipeThresholdY = dp(HEIGHT.toFloat())
-                onGestureListener = swipeDownHideKeyboardCallback
+                onGestureListener = swipeDownExpandCallback
             }
         }
     }
@@ -369,10 +437,11 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         }
         isCapabilityFlagsPassword = toolbarNumRowOnPassword && capFlags.has(CapabilityFlag.Password)
         isInlineSuggestionPresent = false
+        numberRowState = NumberRowState.Auto
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             idleUi.inlineSuggestionsBar.clear()
         }
-        voiceInputSubtype = InputMethodUtil.firstVoiceInput()
+        voiceInputSubtype = InputMethodUtil.findVoiceSubtype(preferredVoiceInput)
         val shouldShowVoiceInput =
             showVoiceInputButton && voiceInputSubtype != null && !capFlags.has(CapabilityFlag.Password)
         idleUi.setHideKeyboardIsVoiceInput(
@@ -421,6 +490,8 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         val suggestions = response.inlineSuggestions
         if (suggestions.isEmpty()) {
             isInlineSuggestionPresent = false
+            evalIdleUiState()
+            idleUi.inlineSuggestionsBar.clear()
             return true
         }
         var pinned: InlineSuggestion? = null
@@ -457,7 +528,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
 
     @RequiresApi(Build.VERSION_CODES.R)
     private suspend fun inflateInlineContentView(suggestion: InlineSuggestion): InlineContentView? {
-        return suspendCoroutine { c ->
+        return suspendCancellableCoroutine { c ->
             // callback view might be null
             suggestion.inflate(context, suggestionSize, directExecutor) { v ->
                 c.resume(v)

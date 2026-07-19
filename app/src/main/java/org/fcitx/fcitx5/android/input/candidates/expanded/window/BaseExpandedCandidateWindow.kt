@@ -15,6 +15,8 @@ import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import org.fcitx.fcitx5.android.core.CandidateAction
+import org.fcitx.fcitx5.android.core.FcitxEvent
 import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.input.bar.ExpandButtonStateMachine.BooleanKey.ExpandedCandidatesEmpty
@@ -24,12 +26,14 @@ import org.fcitx.fcitx5.android.input.bar.KawaiiBarComponent
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcastReceiver
 import org.fcitx.fcitx5.android.input.broadcast.ReturnKeyDrawableComponent
 import org.fcitx.fcitx5.android.input.candidates.CandidateViewHolder
+import org.fcitx.fcitx5.android.input.candidates.expanded.CandidateTabActionsAdapter
 import org.fcitx.fcitx5.android.input.candidates.expanded.CandidatesPagingSource
 import org.fcitx.fcitx5.android.input.candidates.expanded.ExpandedCandidateLayout
 import org.fcitx.fcitx5.android.input.candidates.expanded.PagingCandidateViewAdapter
 import org.fcitx.fcitx5.android.input.candidates.horizontal.HorizontalCandidateComponent
 import org.fcitx.fcitx5.android.input.dependency.fcitx
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
+import org.fcitx.fcitx5.android.input.dependency.inputView
 import org.fcitx.fcitx5.android.input.dependency.theme
 import org.fcitx.fcitx5.android.input.keyboard.CommonKeyActionListener
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction
@@ -39,6 +43,7 @@ import org.fcitx.fcitx5.android.input.wm.InputWindow
 import org.fcitx.fcitx5.android.input.wm.InputWindowManager
 import org.mechdancer.dependency.manager.must
 import splitties.dimensions.dp
+import splitties.views.recyclerview.verticalLayoutManager
 import kotlin.math.max
 
 abstract class BaseExpandedCandidateWindow<T : BaseExpandedCandidateWindow<T>> :
@@ -47,6 +52,7 @@ abstract class BaseExpandedCandidateWindow<T : BaseExpandedCandidateWindow<T>> :
     protected val service by manager.inputMethodService()
     protected val theme by manager.theme()
     protected val fcitx by manager.fcitx()
+    protected val inputView by manager.inputView()
     private val commonKeyActionListener: CommonKeyActionListener by manager.must()
     private val bar: KawaiiBarComponent by manager.must()
     private val horizontalCandidate: HorizontalCandidateComponent by manager.must()
@@ -70,9 +76,13 @@ abstract class BaseExpandedCandidateWindow<T : BaseExpandedCandidateWindow<T>> :
 
     final override fun onCreateView(): View {
         candidateLayout = onCreateCandidateLayout().apply {
-            recyclerView.apply {
-                // disable item cross-fade animation
-                itemAnimator = null
+            scrollableTabs.apply {
+                adapter = tabsAdapter
+                layoutManager = verticalLayoutManager()
+            }
+            pinnedTabs.apply {
+                adapter = pinnedTabsAdapter
+                layoutManager = verticalLayoutManager()
             }
         }
         return candidateLayout
@@ -91,6 +101,34 @@ abstract class BaseExpandedCandidateWindow<T : BaseExpandedCandidateWindow<T>> :
 
     abstract val adapter: PagingCandidateViewAdapter
     abstract val layoutManager: RecyclerView.LayoutManager
+
+    val tabsAdapter by lazy {
+        object : CandidateTabActionsAdapter(theme, false) {
+            override fun onTriggerTabAction(id: Int) {
+                fcitx.launchOnReady { it.triggerCandidateListTabAction(id) }
+            }
+        }
+    }
+
+    val pinnedTabsAdapter by lazy {
+        object : CandidateTabActionsAdapter(theme, true) {
+            override fun onTriggerTabAction(id: Int) {
+                fcitx.launchOnReady { it.triggerCandidateListTabAction(id) }
+            }
+        }
+    }
+
+    private fun updateTabs(newTabs: Array<CandidateAction>) {
+        val tabs = newTabs.takeWhile { !it.isSeparator }
+        val pinnedTabs = newTabs.drop(tabs.size + 1).filter { !it.isSeparator }
+        if (tabs.isEmpty() && pinnedTabs.isEmpty()) {
+            candidateLayout.tabsContainer.visibility = View.GONE
+        } else {
+            candidateLayout.tabsContainer.visibility = View.VISIBLE
+        }
+        tabsAdapter.updateTabs(tabs)
+        pinnedTabsAdapter.updateTabs(pinnedTabs)
+    }
 
     private var offsetJob: Job? = null
 
@@ -121,6 +159,7 @@ abstract class BaseExpandedCandidateWindow<T : BaseExpandedCandidateWindow<T>> :
             it.onReturnDrawableUpdate(returnKeyDrawable.resourceId)
             it.keyActionListener = keyActionListener
         }
+        updateTabs(fcitx.runImmediately { inputPanelCached.tabs })
         offsetJob = service.lifecycleScope.launch {
             horizontalCandidate.expandedCandidateOffset.collect {
                 if (it <= 0) {
@@ -143,7 +182,7 @@ abstract class BaseExpandedCandidateWindow<T : BaseExpandedCandidateWindow<T>> :
             fcitx.launchOnReady { it.select(holder.idx) }
         }
         holder.itemView.setOnLongClickListener {
-            horizontalCandidate.showCandidateActionMenu(holder)
+            inputView.showCandidateActionMenu(holder.idx, holder.candidate.text, holder.ui.root)
             true
         }
     }
@@ -167,6 +206,10 @@ abstract class BaseExpandedCandidateWindow<T : BaseExpandedCandidateWindow<T>> :
         if (empty) {
             windowManager.attachWindow(KeyboardWindow)
         }
+    }
+
+    override fun onInputPanelUpdate(data: FcitxEvent.InputPanelEvent.Data) {
+        updateTabs(data.tabs)
     }
 
 }
