@@ -19,8 +19,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
 import org.fcitx.fcitx5.android.R
+import timber.log.Timber
 
 object AsrkbSpeechClient {
     private const val TAG = "AsrkbLink"
@@ -29,10 +31,12 @@ object AsrkbSpeechClient {
     private var remote: IBinder? = null
     private var sessionId: Int = -1
     private var currentState: Int = STATE_IDLE
+    @Volatile
     private var holding: Boolean = false
     private var ctxRef: Context? = null
     private var audioJob: kotlinx.coroutines.Job? = null
     private var audioRecord: android.media.AudioRecord? = null
+    private val recordingAudioFocusOwner = AsrkbRecordingAudioFocusSessionOwner()
     private var hasPcmFrame: Boolean = false
 
     fun startHoldSession(service: FcitxInputMethodService) {
@@ -173,6 +177,11 @@ object AsrkbSpeechClient {
 
     fun isHolding(): Boolean = holding
 
+    internal fun onServiceDestroyed(service: FcitxInputMethodService) {
+        if (ctxRef !== service) return
+        unbind()
+    }
+
     // 与服务端保持一致的接口描述符与事务号
     private const val DESCRIPTOR_SVC = "com.brycewg.asrkb.aidl.IExternalSpeechService"
     private const val TRANSACTION_startSession = IBinder.FIRST_CALL_TRANSACTION + 0
@@ -260,53 +269,59 @@ object AsrkbSpeechClient {
             return
         }
 
+        acquireRecordingAudioFocusIfEnabled(service)
+
         audioJob = service.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val sr = 16000
-            val ch = android.media.AudioFormat.CHANNEL_IN_MONO
-            val fmt = android.media.AudioFormat.ENCODING_PCM_16BIT
-            val minBuf = android.media.AudioRecord.getMinBufferSize(sr, ch, fmt)
-            val bytesPerSample = 2
-            val chunkBytes = (sr * 200 / 1000) * bytesPerSample
-            val bufSize = kotlin.math.max(minBuf, chunkBytes * 2)
-            var rec = android.media.AudioRecord(
-                android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                sr, ch, fmt, bufSize
-            )
-            audioRecord = rec
-            try { rec.startRecording() } catch (t: Throwable) {
-                Log.w(TAG, "AudioRecord start failed, fallback MIC", t)
-                try { rec.release() } catch (_: Throwable) {}
-                rec = android.media.AudioRecord(
-                    android.media.MediaRecorder.AudioSource.MIC,
+            try {
+                val sr = 16000
+                val ch = android.media.AudioFormat.CHANNEL_IN_MONO
+                val fmt = android.media.AudioFormat.ENCODING_PCM_16BIT
+                val minBuf = android.media.AudioRecord.getMinBufferSize(sr, ch, fmt)
+                val bytesPerSample = 2
+                val chunkBytes = (sr * 200 / 1000) * bytesPerSample
+                val bufSize = kotlin.math.max(minBuf, chunkBytes * 2)
+                var rec = android.media.AudioRecord(
+                    android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION,
                     sr, ch, fmt, bufSize
                 )
                 audioRecord = rec
-                try { rec.startRecording() } catch (e: Throwable) {
-                    Log.e(TAG, "AudioRecord MIC failed", e)
-                    service.lifecycleScope.launch {
-                        toast(service, service.getString(R.string.asrkb_err_audio_record_failed))
-                        runCatching { VoiceOverlayUiBridge.onDone?.invoke() }
-                        unbind()
+                try { rec.startRecording() } catch (t: Throwable) {
+                    Log.w(TAG, "AudioRecord start failed, fallback MIC", t)
+                    try { rec.release() } catch (_: Throwable) {}
+                    rec = android.media.AudioRecord(
+                        android.media.MediaRecorder.AudioSource.MIC,
+                        sr, ch, fmt, bufSize
+                    )
+                    audioRecord = rec
+                    try { rec.startRecording() } catch (e: Throwable) {
+                        Log.e(TAG, "AudioRecord MIC failed", e)
+                        service.lifecycleScope.launch {
+                            toast(service, service.getString(R.string.asrkb_err_audio_record_failed))
+                            runCatching { VoiceOverlayUiBridge.onDone?.invoke() }
+                            unbind()
+                        }
+                        return@launch
                     }
-                    return@launch
                 }
-            }
 
-            val chunk = ByteArray(chunkBytes)
-            var notifiedRecordingStarted = false
-            while (true) {
-                if (sessionId <= 0 || remote == null) break
-                val n = try { audioRecord?.read(chunk, 0, chunk.size) ?: -1 } catch (t: Throwable) { -1 }
-                if (n < 0) break
-                if (n == 0) {
-                    delay(10)
-                    continue
+                val chunk = ByteArray(chunkBytes)
+                var notifiedRecordingStarted = false
+                while (true) {
+                    if (sessionId <= 0 || remote == null) break
+                    val n = try { audioRecord?.read(chunk, 0, chunk.size) ?: -1 } catch (t: Throwable) { -1 }
+                    if (n < 0) break
+                    if (n == 0) {
+                        delay(10)
+                        continue
+                    }
+                    if (!notifiedRecordingStarted) {
+                        notifiedRecordingStarted = true
+                        runCatching { VoiceOverlayUiBridge.onRecordingStarted?.invoke() }
+                    }
+                    writePcmFrame(chunk, n, sr, 1)
                 }
-                if (!notifiedRecordingStarted) {
-                    notifiedRecordingStarted = true
-                    runCatching { VoiceOverlayUiBridge.onRecordingStarted?.invoke() }
-                }
-                writePcmFrame(chunk, n, sr, 1)
+            } finally {
+                recordingAudioFocusOwner.release()
             }
         }
     }
@@ -317,6 +332,28 @@ object AsrkbSpeechClient {
         try { audioRecord?.stop() } catch (_: Throwable) {}
         try { audioRecord?.release() } catch (_: Throwable) {}
         audioRecord = null
+        recordingAudioFocusOwner.release()
+    }
+
+    private fun acquireRecordingAudioFocusIfEnabled(service: FcitxInputMethodService) {
+        if (!AppPrefs.getInstance().keyboard.asrkbDuckMediaOnRecord.getValue()) {
+            Timber.d("ASRKB media avoidance disabled; skip audio focus request")
+            return
+        }
+
+        val executor = ContextCompat.getMainExecutor(service)
+        lateinit var controller: AsrkbRecordingAudioFocusController
+        controller = AsrkbRecordingAudioFocusController(service) { loss ->
+            Timber.w("ASRKB recording audio focus lost: $loss")
+            executor.execute {
+                if (recordingAudioFocusOwner.owns(controller) && holding) {
+                    stopHoldSession()
+                }
+            }
+        }
+        if (!recordingAudioFocusOwner.acquire(controller)) {
+            Timber.w("ASRKB recording continues without audio focus")
+        }
     }
 
     private fun writePcmFrame(buf: ByteArray, len: Int, sr: Int, ch: Int) {

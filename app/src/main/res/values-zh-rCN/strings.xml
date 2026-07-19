@@ -227,6 +227,8 @@
     <string name="edit_theme">编辑主题</string>
     <string name="show_voice_input_button">显示语音输入按钮</string>
     <string name="voice_input_tap_to_stop">使用点按控制语音输入</string>
+    <string name="asrkb_duck_media_on_record">录音时暂停其他媒体</string>
+    <string name="asrkb_duck_media_on_record_summary">使用说点啥语音输入录音时，请求其他应用暂时降低音量或暂停播放。实际效果取决于系统和播放应用。</string>
     <string name="fcitx_daemon">Fcitx 守护程序</string>
     <string name="restarting_fcitx">正在重新启动 Fcitx</string>
     <string name="plugin_needs_reload">检测到插件更改，点此重新加载</string>

@@ -161,4 +161,6 @@
     <string name="following_system_settings">Wie Systemeinstellungen</string>
     <string name="button_sound">Ton bei Tastendruck</string>
     <string name="button_sound_volume">Ton Tastendruck Lautstärke</string>
+    <string name="asrkb_duck_media_on_record">Andere Medien während der Aufnahme pausieren</string>
+    <string name="asrkb_duck_media_on_record_summary">Während der Spracheingabe mit BiBi Keyboard werden andere Apps aufgefordert, ihre Lautstärke vorübergehend zu verringern oder die Wiedergabe anzuhalten. Das tatsächliche Verhalten hängt vom System und der Medien-App ab.</string>
     </resources>

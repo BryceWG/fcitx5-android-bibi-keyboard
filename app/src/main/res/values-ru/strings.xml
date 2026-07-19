@@ -316,4 +316,6 @@
     <string name="emoji_skin_tone_type_6">🏿 Type-6</string>
     <string name="hide_unsupported_emojis">Скрыть неподдерживаемые эмодзи</string>
     <string name="key_border_stroke">Включить обводку для границы клавиши</string>
+    <string name="asrkb_duck_media_on_record">Приостанавливать другие медиа во время записи</string>
+    <string name="asrkb_duck_media_on_record_summary">Во время записи с помощью голосового ввода BiBi Keyboard другим приложениям предлагается временно уменьшить громкость или приостановить воспроизведение. Фактическое поведение зависит от системы и медиаприложения.</string>
 </resources>

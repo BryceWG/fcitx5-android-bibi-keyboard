@@ -91,4 +91,6 @@
     <string name="quickphrase_phrase">구문</string>
     <string name="reload_config">구성 새로고침</string>
     <string name="input_method_options">입력기 옵션</string>
+    <string name="asrkb_duck_media_on_record">녹음 중 다른 미디어 일시 중지</string>
+    <string name="asrkb_duck_media_on_record_summary">BiBi Keyboard 음성 입력으로 녹음하는 동안 다른 앱에 볼륨을 일시적으로 낮추거나 재생을 멈추도록 요청합니다. 실제 동작은 시스템과 미디어 앱에 따라 달라집니다.</string>
     </resources>

@@ -124,4 +124,6 @@
     <string name="i_do_not_need_it">No lo necesito</string>
     <string name="grant_permission">Otorgar permiso</string>
     <string name="update_table">Actualizar tabla</string>
+    <string name="asrkb_duck_media_on_record">Pausar otros medios durante la grabación</string>
+    <string name="asrkb_duck_media_on_record_summary">Mientras se graba con la entrada de voz de BiBi Keyboard, se solicita a otras aplicaciones que bajen temporalmente el volumen o pausen la reproducción. El resultado depende del sistema y de la aplicación multimedia.</string>
     </resources>

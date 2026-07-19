@@ -170,6 +170,13 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             "voice_input_tap_to_stop",
             false
         ) { spaceKeyLongPressBehavior.getValue() == SpaceLongPressBehavior.VoiceInput }
+
+        val asrkbDuckMediaOnRecord = switch(
+            R.string.asrkb_duck_media_on_record,
+            "asrkb_duck_media_on_record",
+            true,
+            R.string.asrkb_duck_media_on_record_summary
+        ) { spaceKeyLongPressBehavior.getValue() == SpaceLongPressBehavior.VoiceInput }
         
         val spaceSwipeMoveCursor =
             switch(R.string.space_swipe_move_cursor, "space_swipe_move_cursor", true)

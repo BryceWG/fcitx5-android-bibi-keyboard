@@ -222,6 +222,8 @@
     <string name="edit_theme">テーマを編集</string>
     <string name="show_voice_input_button">音声入力ボタンを表示する</string>
     <string name="voice_input_tap_to_stop">タップで音声入力を終了する</string>
+    <string name="asrkb_duck_media_on_record">録音中に他のメディアを一時停止</string>
+    <string name="asrkb_duck_media_on_record_summary">BiBi Keyboard の音声入力で録音中、他のアプリに音量を一時的に下げるか再生を停止するよう要求します。実際の動作はシステムと再生アプリによって異なります。</string>
     <string name="fcitx_daemon">Fcitxデーモン</string>
     <string name="restarting_fcitx">Fcitxを再起動中</string>
     <string name="plugin_needs_reload">プラグインの変更を除去しました。ここをクリックして再読み込みします</string>
