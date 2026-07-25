@@ -24,5 +24,29 @@ interface IExternalSpeechService {
 
   /** 版本信息（语义化版本名）。*/
   String getVersion();
-}
 
+  int startPcmSession(in SpeechConfig config, ISpeechCallback callback);
+
+  void writePcm(int sessionId, in byte[] pcm, int sampleRate, int channels);
+
+  void finishPcm(int sessionId);
+
+  int getInputRequirements(int sessionId);
+
+  boolean setInputContext(
+      int sessionId,
+      long generation,
+      int inputType,
+      int imeOptions,
+      String beforeCursor,
+      String afterCursor
+  );
+
+  boolean reportEdit(
+      int sessionId,
+      long generation,
+      String beforeCursor,
+      String afterCursor,
+      String reason
+  );
+}

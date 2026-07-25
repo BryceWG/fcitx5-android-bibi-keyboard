@@ -389,13 +389,17 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 return
             }
             if (actionLabel?.isNotEmpty() == true && actionId != EditorInfo.IME_ACTION_UNSPECIFIED) {
+                AsrkbSpeechClient.onEditorAction()
                 currentInputConnection.performEditorAction(actionId)
                 return
             }
             when (val action = imeOptions and EditorInfo.IME_MASK_ACTION) {
                 EditorInfo.IME_ACTION_UNSPECIFIED,
                 EditorInfo.IME_ACTION_NONE -> sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
-                else -> currentInputConnection.performEditorAction(action)
+                else -> {
+                    AsrkbSpeechClient.onEditorAction()
+                    currentInputConnection.performEditorAction(action)
+                }
             }
         }
     }
@@ -728,6 +732,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onStartInput(attribute: EditorInfo, restarting: Boolean) {
+        AsrkbSpeechClient.onStartInput(attribute, restarting)
         // update selection as soon as possible
         // sometimes when restarting input, onUpdateSelection happens before onStartInput, and
         // initialSel{Start,End} is outdated. but it's the client app's responsibility to send
@@ -799,6 +804,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             cursorUpdateIndex
         )
         inputView?.updateSelection(newSelStart, newSelEnd)
+        AsrkbSpeechClient.onEditorEvent(this)
     }
 
     private val contentSize = floatArrayOf(0f, 0f)
@@ -1068,6 +1074,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onFinishInput() {
         Timber.d("onFinishInput")
+        AsrkbSpeechClient.onFinishInput()
         postFcitxJob {
             focus(false)
         }
