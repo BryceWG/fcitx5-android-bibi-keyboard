@@ -21,6 +21,7 @@ import org.fcitx.fcitx5.android.input.keyboard.SpaceLongPressBehavior
 import org.fcitx.fcitx5.android.input.keyboard.SwipeSymbolDirection
 import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import org.fcitx.fcitx5.android.input.popup.EmojiModifier
+import org.fcitx.fcitx5.android.link.ASRKB_CLIPBOARD_SYNC_ENABLED_KEY
 import org.fcitx.fcitx5.android.utils.DeviceUtil
 import org.fcitx.fcitx5.android.utils.appContext
 import org.fcitx.fcitx5.android.utils.vibrator
@@ -363,6 +364,12 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val clipboardMaskSensitive = switch(
             R.string.clipboard_mask_sensitive, "clipboard_mask_sensitive", true
         ) { clipboardListening.getValue() }
+        val asrkbClipboardSyncEnabled = switch(
+            R.string.asrkb_clipboard_sync_enabled,
+            ASRKB_CLIPBOARD_SYNC_ENABLED_KEY,
+            false,
+            R.string.asrkb_clipboard_sync_enabled_summary
+        )
     }
 
     inner class Symbols : ManagedPreferenceCategory(R.string.emoji_and_symbols, sharedPreferences) {

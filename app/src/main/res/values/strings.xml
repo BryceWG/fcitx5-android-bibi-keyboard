@@ -229,6 +229,18 @@
     <string name="voice_input_tap_to_stop">Use tap to stop voice input</string>
     <string name="asrkb_duck_media_on_record">Pause other media while recording</string>
     <string name="asrkb_duck_media_on_record_summary">While BiBi Keyboard voice input is recording, ask other apps to temporarily lower their volume or pause. The result depends on the system and the media app.</string>
+    <string name="asrkb_clipboard_sync_enabled">Enable BiBi Keyboard clipboard sync</string>
+    <string name="asrkb_clipboard_sync_enabled_summary">Connect to BiBi Keyboard while this IME is active and use its SyncClipboard configuration. Clipboard sync must also be enabled in BiBi Keyboard.</string>
+    <string name="asrkb_clipboard_sync_disabled_notice">Clipboard changes from this IME will no longer sync with BiBi Keyboard.</string>
+    <string name="asrkb_clipboard_sync_status">Connection status</string>
+    <string name="asrkb_clipboard_sync_status_stopped">IME service is not running. Open the keyboard to connect.</string>
+    <string name="asrkb_clipboard_sync_status_disabled">Disabled</string>
+    <string name="asrkb_clipboard_sync_status_waiting">Waiting for the keyboard window</string>
+    <string name="asrkb_clipboard_sync_status_connecting">Connecting (Pro first, then open-source)…</string>
+    <string name="asrkb_clipboard_sync_status_reconnecting">Connection lost; reconnecting…</string>
+    <string name="asrkb_clipboard_sync_status_connected">Connected to %1$s; waiting for sync subscription</string>
+    <string name="asrkb_clipboard_sync_status_observing">Connected to %1$s and observing clipboard changes</string>
+    <string name="asrkb_clipboard_sync_status_error">Last connection failed: %1$s. Codes: 0=service unavailable, -1=update BiBi Keyboard, -2=bad request, -3=caller rejected, -4=current IME mismatch, -5=host rejected, -6=sync disabled, -7=bridge unavailable.</string>
     <string name="fcitx_daemon">Fcitx Daemon</string>
     <string name="restarting_fcitx">Restarting Fcitx</string>
     <string name="plugin_needs_reload">Plugin changes detected, click here to reload</string>
