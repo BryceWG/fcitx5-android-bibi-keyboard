@@ -341,4 +341,7 @@
     <string name="asrkb_err_service_error_with_code">Voice service error (code %1$d)</string>
     <string name="preferred_voice_input">Preferred voice input</string>
     <string name="edit_text_playground">EditText Playground</string>
+    <string name="keyboard_height_percent_base">Keyboard height percent base</string>
+    <string name="display_metrics">Display metrics (Resources.getDisplayMetrics)</string>
+    <string name="real_size">Real size (Display.getRealSize)</string>
 </resources>

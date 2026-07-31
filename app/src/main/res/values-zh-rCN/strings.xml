@@ -340,4 +340,8 @@
     <string name="asrkb_err_start_failed_with_code">启动会话失败（错误码 %1$d）</string>
     <string name="asrkb_err_service_error_with_code">语音服务错误（错误码 %1$d）</string>
     <string name="preferred_voice_input">首选语音输入</string>
+    <string name="edit_text_playground">文本输入框 (EditText) 演练场</string>
+    <string name="keyboard_height_percent_base">键盘高度百分比</string>
+    <string name="display_metrics">显示指标 (Resources.getDisplayMetrics)</string>
+    <string name="real_size">真实尺寸 (Display.getRealSize)</string>
 </resources>

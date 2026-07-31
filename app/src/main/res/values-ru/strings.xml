@@ -318,4 +318,6 @@
     <string name="key_border_stroke">Включить обводку для границы клавиши</string>
     <string name="asrkb_duck_media_on_record">Приостанавливать другие медиа во время записи</string>
     <string name="asrkb_duck_media_on_record_summary">Во время записи с помощью голосового ввода BiBi Keyboard другим приложениям предлагается временно уменьшить громкость или приостановить воспроизведение. Фактическое поведение зависит от системы и медиаприложения.</string>
+    <string name="preferred_voice_input">Предпочтительный голосовой ввод</string>
+    <string name="edit_text_playground">Тестовое поле EditText</string>
 </resources>
