@@ -103,6 +103,10 @@ internal class AsrkbClipboardSyncBridge(context: Context) {
             updateStatus(AsrkbClipboardSyncPhase.DISABLED)
             return
         }
+        val currentPhase = AsrkbClipboardSyncStatus.decode(
+            preferences.getString(ASRKB_CLIPBOARD_SYNC_STATUS_KEY, null),
+        ).phase
+        if (!shouldStartActivationOnWindowShown(currentPhase)) return
         val currentGeneration = ++generation
         updateStatus(AsrkbClipboardSyncPhase.CONNECTING)
         executor.execute { activate(currentGeneration) }
@@ -112,13 +116,13 @@ internal class AsrkbClipboardSyncBridge(context: Context) {
     fun windowHidden() {
         if (destroyed) return
         windowVisible = false
-        generation++
+        val current = AsrkbClipboardSyncStatus.decode(
+            preferences.getString(ASRKB_CLIPBOARD_SYNC_STATUS_KEY, null),
+        )
+        val next = statusAfterWindowHidden(current)
+        if (next != current) generation++
         executor.execute { transactSession(TRANSACTION_WINDOW_HIDDEN) }
         if (sessionId == null && isEnabled()) {
-            val current = AsrkbClipboardSyncStatus.decode(
-                preferences.getString(ASRKB_CLIPBOARD_SYNC_STATUS_KEY, null),
-            )
-            val next = statusAfterWindowHidden(current)
             updateStatus(next.phase, next.detail)
         }
     }
@@ -170,14 +174,23 @@ internal class AsrkbClipboardSyncBridge(context: Context) {
 
     private fun activate(candidateGeneration: Long) {
         if (!isCurrent(candidateGeneration)) return
-        if (binder?.isBinderAlive == true && sessionId != null) {
-            val (phase, hostName) = synchronized(this) {
-                activeSessionPhase(subscription?.host == activeHost) to activeHost?.name.orEmpty()
+        val existingSessionId = sessionId.takeIf { binder?.isBinderAlive == true }
+        if (existingSessionId != null) {
+            val result = activate(existingSessionId)
+            if (result == RESULT_OK) {
+                if (isCurrent(candidateGeneration)) {
+                    val (phase, hostName) = synchronized(this) {
+                        activeSessionPhase(subscription?.host == activeHost) to activeHost?.name.orEmpty()
+                    }
+                    updateStatus(phase, hostName)
+                }
+                return
             }
-            updateStatus(phase, hostName)
-            return
+            if (!isCurrent(candidateGeneration)) return
+            stopObserving()
         }
         unbind()
+        if (!isCurrent(candidateGeneration)) return
         val newSessionId = UUID.randomUUID().toString()
         val attempts = mutableListOf<String>()
         for (host in HOSTS) {
@@ -265,8 +278,8 @@ internal class AsrkbClipboardSyncBridge(context: Context) {
         sessionId = null
         activeHost = null
         stopObserving()
-        if (!windowVisible || !isEnabled()) {
-            updateStatus(if (isEnabled()) AsrkbClipboardSyncPhase.WAITING else AsrkbClipboardSyncPhase.DISABLED)
+        if (!isEnabled()) {
+            updateStatus(AsrkbClipboardSyncPhase.DISABLED)
             return
         }
         val currentGeneration = ++generation

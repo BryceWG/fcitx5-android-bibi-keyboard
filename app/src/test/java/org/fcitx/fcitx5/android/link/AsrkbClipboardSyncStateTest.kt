@@ -50,6 +50,20 @@ class AsrkbClipboardSyncStateTest {
     }
 
     @Test
+    fun closingTheImeCancelsInitialConnectionButKeepsAQueuedReconnectAlive() {
+        val connecting = AsrkbClipboardSyncStatus(AsrkbClipboardSyncPhase.CONNECTING)
+        val reconnecting = AsrkbClipboardSyncStatus(AsrkbClipboardSyncPhase.RECONNECTING)
+
+        assertEquals(
+            AsrkbClipboardSyncStatus(AsrkbClipboardSyncPhase.WAITING),
+            statusAfterWindowHidden(connecting),
+        )
+        assertFalse(shouldStartActivationOnWindowShown(reconnecting.phase))
+        assertEquals(reconnecting, statusAfterWindowHidden(reconnecting))
+        assertTrue(shouldStartActivationOnWindowShown(AsrkbClipboardSyncPhase.WAITING))
+    }
+
+    @Test
     fun hostRequestsRequireTheEnabledActiveSession() {
         assertTrue(isClipboardHostRequestAuthorized(true, true, "oss", "oss"))
         assertFalse(isClipboardHostRequestAuthorized(false, true, "oss", "oss"))

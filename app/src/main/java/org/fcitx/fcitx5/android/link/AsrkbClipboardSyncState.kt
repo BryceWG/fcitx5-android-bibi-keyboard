@@ -40,11 +40,13 @@ internal data class AsrkbClipboardSyncStatus(
 
 internal fun statusAfterWindowHidden(status: AsrkbClipboardSyncStatus): AsrkbClipboardSyncStatus =
     when (status.phase) {
-        AsrkbClipboardSyncPhase.CONNECTING,
-        AsrkbClipboardSyncPhase.RECONNECTING,
-        -> AsrkbClipboardSyncStatus(AsrkbClipboardSyncPhase.WAITING)
+        AsrkbClipboardSyncPhase.CONNECTING ->
+            AsrkbClipboardSyncStatus(AsrkbClipboardSyncPhase.WAITING)
         else -> status
     }
+
+internal fun shouldStartActivationOnWindowShown(phase: AsrkbClipboardSyncPhase): Boolean =
+    phase != AsrkbClipboardSyncPhase.RECONNECTING
 
 internal fun activeSessionPhase(isObserving: Boolean): AsrkbClipboardSyncPhase =
     if (isObserving) AsrkbClipboardSyncPhase.OBSERVING else AsrkbClipboardSyncPhase.CONNECTED
