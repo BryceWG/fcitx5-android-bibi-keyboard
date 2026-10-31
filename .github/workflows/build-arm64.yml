@@ -10,10 +10,17 @@ on:
       - '.github/workflows/fdroid.yml'
       - '.github/workflows/nix.yml'
       - '.github/workflows/publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BUILD_ABI: arm64-v8a
     steps:
       - name: Fetch source code
         uses: actions/checkout@v5
@@ -24,53 +31,47 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
-          distribution: "temurin"
-          java-version: "17"
+          distribution: temurin
+          java-version: '21'
 
       - name: Setup Android environment
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: 'false'
 
-      - name: Install Android NDK and CMake
-        run: |
-          sdkmanager --install "cmake;3.31.6"
+      - name: Install Android SDK, NDK and CMake
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.1.0' 'ndk;28.0.13004108' 'cmake;3.31.6'
 
       - name: Install system dependencies
         run: |
           sudo apt update
-          sudo apt install extra-cmake-modules gettext
+          sudo apt install -y extra-cmake-modules gettext
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
 
-      - name: Build arm64-v8a Release APK
-        run: |
-          ./gradlew :app:assembleRelease -Pandroid.injected.build.abi=arm64-v8a
+      - name: Build signed debug APK and run sync unit tests
+        run: >-
+          ./gradlew :app:assembleDebug :app:testDebugUnitTest
+          --tests org.fcitx.fcitx5.android.rustclipsync.SyncStateTest
+          --no-daemon --console=plain
 
-      - name: Get commit info
-        id: commit_info
+      - name: Verify APK signature and architecture
+        shell: bash
         run: |
-          echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "commit_msg=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
-          echo "timestamp=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/debug/*.apk)
+          test "${#apks[@]}" -eq 1
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify --verbose "${apks[0]}"
+          "$ANDROID_HOME/build-tools/36.1.0/aapt" dump badging "${apks[0]}" > "$RUNNER_TEMP/apk-badging.txt"
+          grep -E "^package: name='org\\.fcitx\\.fcitx5\\.android\\.debug' " "$RUNNER_TEMP/apk-badging.txt"
+          grep -Fx "native-code: 'arm64-v8a'" "$RUNNER_TEMP/apk-badging.txt"
 
-      - name: List build outputs
-        run: |
-          echo "=== Listing APK build outputs ==="
-          find app/build/outputs -name "*.apk" -type f
-
-      - name: Rename APK
-        run: |
-          # 找到所有 APK 文件并重命名
-          find app/build/outputs/apk -name "*.apk" -type f | while read apk; do
-            dir=$(dirname "$apk")
-            newname="fcitx5-android-arm64-v8a-${{ steps.commit_info.outputs.timestamp }}-${{ steps.commit_info.outputs.short_sha }}.apk"
-            mv "$apk" "$dir/$newname"
-            echo "Renamed: $apk -> $dir/$newname"
-          done
-
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v5
         with:
-          name: fcitx5-android-arm64-v8a-${{ steps.commit_info.outputs.short_sha }}
-          path: app/build/outputs/apk/**/*.apk
+          name: rustclipsync-android-arm64-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
           retention-days: 30

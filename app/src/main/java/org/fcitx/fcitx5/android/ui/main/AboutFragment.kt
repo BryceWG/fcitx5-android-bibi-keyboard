@@ -18,9 +18,13 @@ import org.fcitx.fcitx5.android.utils.formatDateTime
 import org.fcitx.fcitx5.android.utils.navigateWithAnim
 
 class AboutFragment : PaddingPreferenceFragment() {
+    private val forkUrl = "https://github.com/Infinifar/fcitx5-android-bibi-keyboard"
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceScreen = preferenceManager.createPreferenceScreen(requireContext()).apply {
+            addPreference(R.string.rcs_about_title, R.string.rcs_about_summary) {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(forkUrl)))
+            }
             addPreference(R.string.privacy_policy) {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Const.privacyPolicyUrl)))
             }
@@ -31,7 +35,7 @@ class AboutFragment : PaddingPreferenceFragment() {
                 navigateWithAnim(SettingsRoute.License)
             }
             addPreference(R.string.source_code, R.string.github_repo) {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Const.githubRepo)))
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(forkUrl)))
             }
             addPreference(R.string.license, Const.licenseSpdxId) {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Const.licenseUrl)))
@@ -41,7 +45,7 @@ class AboutFragment : PaddingPreferenceFragment() {
                 addPreference(R.string.current_version, Const.versionName)
                 addPreference(R.string.build_git_hash, BuildConfig.BUILD_GIT_HASH) {
                     val commit = BuildConfig.BUILD_GIT_HASH.substringBefore('-')
-                    val uri = Uri.parse("${Const.githubRepo}/commit/${commit}")
+                    val uri = Uri.parse("${forkUrl}/commit/${commit}")
                     startActivity(Intent(Intent.ACTION_VIEW, uri))
                 }
                 addPreference(R.string.build_time, formatDateTime(BuildConfig.BUILD_TIME))

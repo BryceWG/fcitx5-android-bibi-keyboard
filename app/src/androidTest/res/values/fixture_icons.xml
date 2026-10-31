@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The generated debug aliases are also merged into the instrumentation APK. -->
+    <item type="mipmap" name="ic_launcher_debug">@android:drawable/sym_def_app_icon</item>
+    <item type="mipmap" name="ic_launcher_round_debug">@android:drawable/sym_def_app_icon</item>
+    <string name="app_name_debug">Fcitx5 test</string>
+</resources>

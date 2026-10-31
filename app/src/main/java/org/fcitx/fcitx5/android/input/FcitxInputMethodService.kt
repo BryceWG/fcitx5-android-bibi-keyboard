@@ -65,7 +65,7 @@ import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.cursor.CursorRange
 import org.fcitx.fcitx5.android.input.cursor.CursorTracker
-import org.fcitx.fcitx5.android.link.AsrkbClipboardSyncBridge
+import org.fcitx.fcitx5.android.rustclipsync.SyncRuntime
 import org.fcitx.fcitx5.android.link.AsrkbSpeechClient
 import org.fcitx.fcitx5.android.utils.InputMethodUtil
 import org.fcitx.fcitx5.android.utils.alpha
@@ -82,7 +82,7 @@ import timber.log.Timber
 import kotlin.math.max
 
 class FcitxInputMethodService : LifecycleInputMethodService() {
-    private val asrkbClipboardSyncBridge by lazy { AsrkbClipboardSyncBridge(this) }
+    private val rustClipSync by lazy { SyncRuntime(this) }
 
     private lateinit var fcitx: FcitxConnection
 
@@ -226,7 +226,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             }
         }
         super.onCreate()
-        asrkbClipboardSyncBridge.create()
+        rustClipSync.create()
         decorView = window.window!!.decorView
         contentView = decorView.findViewById(android.R.id.content)
         lastKnownConfig = resources.configuration
@@ -569,7 +569,6 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onWindowShown() {
         super.onWindowShown()
-        asrkbClipboardSyncBridge.windowShown()
         try {
             highlightColor = styledColor(android.R.attr.colorAccent).alpha(0.4f)
         } catch (_: Exception) {
@@ -579,7 +578,6 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onWindowHidden() {
-        asrkbClipboardSyncBridge.windowHidden()
         super.onWindowHidden()
     }
 
@@ -1104,7 +1102,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onDestroy() {
         AsrkbSpeechClient.onServiceDestroyed(this)
-        asrkbClipboardSyncBridge.destroy()
+        rustClipSync.destroy()
         recreateInputViewPrefs.forEach {
             it.unregisterOnChangeListener(recreateInputViewListener)
         }
