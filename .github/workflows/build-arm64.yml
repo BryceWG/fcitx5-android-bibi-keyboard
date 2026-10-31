@@ -35,7 +35,9 @@ jobs:
           java-version: '21'
 
       - name: Setup Android environment
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: 'false'
 
       - name: Install Android SDK, NDK and CMake
         run: sdkmanager 'platforms;android-36' 'build-tools;36.1.0' 'ndk;28.0.13004108' 'cmake;3.31.6'
