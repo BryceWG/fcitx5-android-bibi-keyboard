@@ -241,7 +241,9 @@
     <string name="rcs_enabled">启用 RustClipSync</string>
     <string name="rcs_enabled_summary">本输入法处于活动状态时同步；暂停后未发送的本地内容需要重新确认。</string>
     <string name="rcs_allow_sensitive">同步已标记的敏感文本</string>
-    <string name="rcs_allow_sensitive_summary">默认关闭。部分应用可能不标记敏感内容，因此不能识别所有秘密。</string>
+    <string name="rcs_allow_sensitive_summary">默认关闭。部分应用可能不标记敏感内容，因此不能识别所有敏感信息。</string>
+    <string name="rcs_about_title">RustClipSync 同步</string>
+    <string name="rcs_about_summary">已移除说点啥剪贴板同步桥，改用 RustClipSync V1；保留说点啥语音输入支持。</string>
     <string name="rcs_status">RustClipSync 状态</string>
     <string name="rcs_device_id">设备 ID</string>
     <string name="rcs_status_unpaired">尚未配对。</string>

@@ -241,7 +241,9 @@
     <string name="rcs_enabled">Enable RustClipSync</string>
     <string name="rcs_enabled_summary">Sync while this is the active input method. A pending local copy needs review after pausing.</string>
     <string name="rcs_allow_sensitive">Sync marked sensitive text</string>
-    <string name="rcs_allow_sensitive_summary">Off by default. Apps may fail to mark sensitive text, so this does not detect every secret.</string>
+    <string name="rcs_allow_sensitive_summary">Off by default. Some apps may not mark sensitive content, so not all sensitive information can be identified.</string>
+    <string name="rcs_about_title">RustClipSync synchronization</string>
+    <string name="rcs_about_summary">The BiBi Keyboard clipboard bridge has been replaced by RustClipSync V1. BiBi Keyboard voice input remains supported.</string>
     <string name="rcs_status">RustClipSync status</string>
     <string name="rcs_device_id">Device ID</string>
     <string name="rcs_status_unpaired">Not paired.</string>
